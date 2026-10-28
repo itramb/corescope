@@ -1,4 +1,5 @@
 /target
+/.build-tools
 /dist
 /*.zip
 /installer/redist

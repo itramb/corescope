@@ -1,8 +1,10 @@
+use crate::governor::Priority;
 use serde_json::{json, Value};
 use std::{
     mem::{size_of, zeroed},
     ptr::{null, null_mut},
 };
+use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 use windows_sys::Win32::{
     Foundation::*,
     System::{Memory::*, Threading::*},
@@ -67,14 +69,132 @@ fn mask_for(cores: &[usize], allowed: usize) -> Result<usize, String> {
     }
     Ok(mask)
 }
+pub fn validate_cores(cores: &[usize]) -> Result<(), String> {
+    mask_for(cores, masks(unsafe { GetCurrentProcess() })?.1).map(|_| ())
+}
+pub fn validate_excluded_cores(cores: &[usize]) -> Result<(), String> {
+    let allowed = masks(unsafe { GetCurrentProcess() })?.1;
+    let excluded = mask_for(cores, allowed)?;
+    if allowed & !excluded == 0 {
+        return Err("Cannot exclude every CPU".into());
+    }
+    Ok(())
+}
+pub fn compare_affinity(
+    pid: u32,
+    expected: &str,
+    cores: &[usize],
+    previous: Option<&[usize]>,
+) -> Result<bool, String> {
+    let h = open(pid, PROCESS_QUERY_INFORMATION | PROCESS_SET_INFORMATION)?;
+    if identity(h.0)?.to_string() != expected {
+        return Err("Процесс завершён или PID изменился".into());
+    }
+    let (current, allowed) = masks(h.0)?;
+    if let Some(previous) = previous {
+        if current != mask_for(previous, allowed)? {
+            return Ok(false);
+        }
+    }
+    let next = mask_for(cores, allowed)?;
+    if unsafe { SetProcessAffinityMask(h.0, next) } == 0 {
+        return Err(err());
+    }
+    Ok(true)
+}
 pub fn summary(pid: u32) -> Value {
     match open(pid, PROCESS_QUERY_LIMITED_INFORMATION) {
         Ok(h) => {
             let m = masks(h.0).ok();
-            json!({"identity":identity(h.0).ok().map(|x|x.to_string()),"affinity":m.map(|m|indices(m.0)),"allowed":m.map(|m|indices(m.1))})
+            let priority = priority_from_raw(unsafe { GetPriorityClass(h.0) });
+            let mut critical = 1;
+            let safe = unsafe { IsProcessCritical(h.0, &mut critical) } != 0 && critical == 0;
+            let mut path = vec![0u16; 32768];
+            let mut length = path.len() as u32;
+            let path =
+                if unsafe { QueryFullProcessImageNameW(h.0, 0, path.as_mut_ptr(), &mut length) }
+                    != 0
+                {
+                    Some(String::from_utf16_lossy(&path[..length as usize]))
+                } else {
+                    None
+                };
+            let mut session = 0;
+            let interactive =
+                unsafe { ProcessIdToSessionId(pid, &mut session) } != 0 && session != 0;
+            json!({"identity":identity(h.0).ok().map(|x|x.to_string()),"affinity":m.map(|m|indices(m.0)),"allowed":m.map(|m|indices(m.1)),"priority":priority,"path":path,"balance_safe":safe && interactive})
         }
-        Err(_) => json!({"identity":null,"affinity":null,"allowed":null}),
+        Err(_) => {
+            json!({"identity":null,"affinity":null,"allowed":null,"priority":null,"path":null,"balance_safe":false})
+        }
     }
+}
+fn priority_from_raw(value: u32) -> Option<Priority> {
+    match value {
+        IDLE_PRIORITY_CLASS => Some(Priority::Idle),
+        BELOW_NORMAL_PRIORITY_CLASS => Some(Priority::BelowNormal),
+        NORMAL_PRIORITY_CLASS => Some(Priority::Normal),
+        ABOVE_NORMAL_PRIORITY_CLASS => Some(Priority::AboveNormal),
+        HIGH_PRIORITY_CLASS => Some(Priority::High),
+        REALTIME_PRIORITY_CLASS => Some(Priority::Realtime),
+        _ => None,
+    }
+}
+fn priority_raw(value: Priority) -> u32 {
+    match value {
+        Priority::Idle => IDLE_PRIORITY_CLASS,
+        Priority::BelowNormal => BELOW_NORMAL_PRIORITY_CLASS,
+        Priority::Normal => NORMAL_PRIORITY_CLASS,
+        Priority::AboveNormal => ABOVE_NORMAL_PRIORITY_CLASS,
+        Priority::High => HIGH_PRIORITY_CLASS,
+        Priority::Realtime => REALTIME_PRIORITY_CLASS,
+    }
+}
+pub fn foreground_pid() -> u32 {
+    let mut pid = 0;
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId(
+            windows_sys::Win32::UI::WindowsAndMessaging::GetForegroundWindow(),
+            &mut pid,
+        );
+    }
+    pid
+}
+/// Identity and compare-before-write checks use the very same handle as the mutation.
+/// A false result means another owner changed the priority; never overwrite it on restore.
+pub fn priority(
+    pid: u32,
+    expected: &str,
+    value: Priority,
+    previous: Option<Priority>,
+) -> Result<bool, String> {
+    let h = open(
+        pid,
+        PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SET_INFORMATION,
+    )?;
+    if identity(h.0)?.to_string() != expected {
+        return Err("Процесс завершён или PID изменился".into());
+    }
+    let current = priority_from_raw(unsafe { GetPriorityClass(h.0) }).ok_or_else(err)?;
+    if previous.is_some_and(|p| p != current) {
+        return Ok(false);
+    }
+    if previous == Some(Priority::Normal) && value == Priority::BelowNormal {
+        let mut critical = 1;
+        let mut session = 0;
+        if foreground_pid() == pid
+            || unsafe { IsProcessCritical(h.0, &mut critical) } == 0
+            || critical != 0
+            || unsafe { ProcessIdToSessionId(pid, &mut session) } == 0
+            || session == 0
+        {
+            return Ok(false);
+        }
+    }
+    if unsafe { SetPriorityClass(h.0, priority_raw(value)) } == 0 {
+        return Err(err());
+    }
+    Ok(true)
 }
 pub fn affinity(pid: u32, expected: &str, cores: &[usize]) -> Result<Value, String> {
     let h = open(pid, PROCESS_QUERY_INFORMATION | PROCESS_SET_INFORMATION)?;
@@ -106,10 +226,13 @@ pub fn core_access(pid: u32, expected: &str, core: usize, enabled: bool) -> Resu
     if next == 0 {
         return Err("Нельзя запретить последнее разрешённое ядро".into());
     }
+    if next == current {
+        return Ok(json!({"affinity":indices(current),"changed":false}));
+    }
     if unsafe { SetProcessAffinityMask(h.0, next) } == 0 {
         return Err(err());
     }
-    Ok(json!({"affinity":indices(masks(h.0)?.0)}))
+    Ok(json!({"affinity":indices(masks(h.0)?.0),"changed":true}))
 }
 
 pub fn memory(pid: u32, expected: &str) -> Result<Value, String> {
@@ -265,6 +388,15 @@ mod integration_tests {
                 assert_eq!(summary(pid)["affinity"], json!([second]));
             }
             affinity(pid, identity, &original).unwrap();
+            assert!(priority(pid, "stale", Priority::BelowNormal, None).is_err());
+            assert!(priority(pid, identity, Priority::BelowNormal, None).unwrap());
+            assert_eq!(summary(pid)["priority"], json!(Priority::BelowNormal));
+            assert!(!priority(pid, identity, Priority::High, Some(Priority::Normal)).unwrap());
+            assert!(
+                priority(pid, identity, Priority::Normal, Some(Priority::BelowNormal)).unwrap()
+            );
+            assert_eq!(summary(pid)["priority"], json!(Priority::Normal));
+            assert!(!compare_affinity(pid, identity, &[first], Some(&[])).unwrap_or(false));
         });
         let _ = child.kill();
         let _ = child.wait();

@@ -1,6 +1,9 @@
 #![windows_subsystem = "windows"]
 mod activity;
+mod activity_log;
 mod desktop;
+mod governor;
+mod latency;
 mod platform;
 mod settings;
 mod webview;
@@ -67,7 +70,15 @@ async fn index(State(a): State<App>) -> Html<String> {
     Html(
         include_str!("../assets/index.html")
             .replace("__TOKEN__", &a.token)
-            .replace("/*__I18N__*/", include_str!("../assets/i18n.js")),
+            .replace("/*__I18N__*/", include_str!("../assets/i18n.js"))
+            .replace(
+                "/*__AUTOMATION__*/",
+                include_str!("../assets/automation.js"),
+            )
+            .replace(
+                "/*__DIAGNOSTICS__*/",
+                include_str!("../assets/diagnostics.js"),
+            ),
     )
 }
 async fn snapshot(State(a): State<App>) -> Json<Value> {
@@ -82,6 +93,9 @@ async fn snapshot(State(a): State<App>) -> Json<Value> {
     s["telemetry"]["sensors"] = json!(list);
     s["telemetry"]["extended"] = ext;
     s["settings"] = json!(settings::get());
+    s["automation"] = governor::snapshot();
+    s["latency"] = latency::snapshot();
+    s["activity_log"] = activity_log::status();
     Json(s)
 }
 type ApiResult = Result<Json<Value>, (StatusCode, Json<Value>)>;
@@ -98,6 +112,52 @@ async fn affinity(Path(pid): Path<u32>, Json(body): Json<Affinity>) -> ApiResult
     result(platform::affinity(pid, &body.identity, &body.cores))
 }
 #[derive(Deserialize)]
+struct PriorityRequest {
+    identity: String,
+    priority: governor::Priority,
+}
+async fn priority(Path(pid): Path<u32>, Json(body): Json<PriorityRequest>) -> ApiResult {
+    result(governor::set_priority(pid, &body.identity, body.priority))
+}
+#[derive(Deserialize)]
+struct AutomationRequest {
+    config: governor::Config,
+    revision: u64,
+}
+async fn automation(Json(body): Json<AutomationRequest>) -> ApiResult {
+    result(governor::save(body.config, body.revision))
+}
+#[derive(Deserialize)]
+struct LogRequest {
+    core: usize,
+    enabled: bool,
+}
+async fn log_core(Json(body): Json<LogRequest>) -> ApiResult {
+    if body.core
+        >= unsafe { windows_sys::Win32::System::Threading::GetActiveProcessorCount(0) } as usize
+    {
+        return result(Err("Invalid CPU".into()));
+    }
+    let mut s = settings::get();
+    s.activity_log_cores.retain(|&c| c != body.core);
+    if body.enabled {
+        s.activity_log_cores.push(body.core);
+    }
+    result(settings::save(s).map(|s| json!(s)))
+}
+#[derive(Deserialize)]
+struct HistoryQuery {
+    core: usize,
+    minutes: Option<u64>,
+}
+async fn activity_history(Query(q): Query<HistoryQuery>) -> ApiResult {
+    result(
+        tokio::task::spawn_blocking(move || activity_log::read(q.core, q.minutes.unwrap_or(60)))
+            .await
+            .unwrap_or_else(|e| Err(e.to_string())),
+    )
+}
+#[derive(Deserialize)]
 struct CoreAccess {
     identity: String,
     core: usize,
@@ -110,6 +170,23 @@ async fn core_access(Path(pid): Path<u32>, Json(body): Json<CoreAccess>) -> ApiR
         body.core,
         body.enabled,
     ))
+}
+async fn application_core(
+    State(a): State<App>,
+    Path(pid): Path<u32>,
+    Json(body): Json<CoreAccess>,
+) -> ApiResult {
+    let processes = a.snapshot.read().unwrap()["processes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    result(
+        tokio::task::spawn_blocking(move || {
+            governor::application_core(pid, &body.identity, body.core, body.enabled, &processes)
+        })
+        .await
+        .unwrap_or_else(|e| Err(e.to_string())),
+    )
 }
 #[derive(Deserialize)]
 struct MemoryQuery {
@@ -156,12 +233,15 @@ fn collect(a: App) {
                 let mut v = platform::summary(pid.as_u32());
                 v["pid"] = json!(pid.as_u32());
                 v["name"] = json!(p.name().to_string_lossy());
+                v["parent"] = json!(p.parent().map(|pid| pid.as_u32()));
                 v["cpu"] = json!(p.cpu_usage() / cpus.len().max(1) as f32);
                 v["memory"] = json!(p.memory());
                 v["virtual_memory"] = json!(p.virtual_memory());
                 v
             })
             .collect();
+        governor::collect(&mut processes, system.global_cpu_usage() as f64);
+        activity::remember(&processes);
         processes.sort_by(|a, b| {
             b["cpu"]
                 .as_f64()
@@ -169,6 +249,11 @@ fn collect(a: App) {
                 .total_cmp(&a["cpu"].as_f64().unwrap_or_default())
         });
         *a.snapshot.write().unwrap() = json!({"activity":activity::snapshot(),"ready":true,"time":now(),"host":System::host_name(),"cpu_name":system.cpus().first().map(|c|c.brand()),"cpu_usage":system.global_cpu_usage(),"cpus":cpus,"processes":processes,"memory_total":system.total_memory(),"memory_used":system.used_memory(),"affinity_supported":platform::groups_supported()});
+        activity_log::record(
+            &a.snapshot.read().unwrap(),
+            &settings::get().activity_log_cores,
+            &a.extended.read().unwrap(),
+        );
     }
 }
 fn sensors(a: App, extended: bool) {
@@ -240,7 +325,9 @@ fn sensors(a: App, extended: bool) {
                 v["time"] = json!(now());
                 if let Some(list) = v["sensors"].as_array_mut() {
                     for s in list {
-                        if s["kind"] == "Temperature" {
+                        if ["Temperature", "Clock", "Load", "Power", "Throttling"]
+                            .contains(&s["kind"].as_str().unwrap_or(""))
+                        {
                             if let (Some(id), Some(value)) =
                                 (s["identifier"].as_str(), s["value"].as_f64())
                             {
@@ -310,7 +397,15 @@ async fn run_server(
         .route("/api/snapshot", get(snapshot))
         .route("/api/process/{pid}/memory", get(memory))
         .route("/api/process/{pid}/affinity", post(affinity))
+        .route("/api/process/{pid}/priority", post(priority))
+        .route("/api/automation", post(automation))
+        .route("/api/activity/logging", post(log_core))
+        .route("/api/activity/history", get(activity_history))
         .route("/api/process/{pid}/core", post(core_access))
+        .route(
+            "/api/process/{pid}/application/core",
+            post(application_core),
+        )
         .route("/api/launch", post(launch))
         .route("/api/settings", post(save_settings))
         .route("/api/sensors/start", post(start_sensors))
@@ -323,6 +418,7 @@ async fn run_server(
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;
+            governor::stop();
         })
         .await?;
     Ok(())
@@ -343,6 +439,7 @@ fn main() {
         return;
     }
     let _activity = activity::start();
+    latency::start();
     if let Some(session) = &_activity {
         session.watch();
     }
@@ -372,4 +469,5 @@ fn main() {
         Err(e) => desktop::error(&format!("CoreScope could not start: {e}")),
     }
     runtime.shutdown_timeout(Duration::from_secs(2));
+    governor::stop();
 }

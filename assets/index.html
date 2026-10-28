@@ -389,9 +389,23 @@
       }
       .sensors {
         padding: 6px 20px 18px;
-        max-height: 360px;
+        max-height: 480px;
         overflow: auto;
       }
+      .sensor-device { margin:8px 0; border:1px solid var(--line); border-radius:8px; }
+      .sensor-device > summary { display:flex; align-items:center; gap:8px; padding:11px 10px; cursor:pointer; list-style:none; font-size:12px; }
+      .sensor-device > summary::-webkit-details-marker { display:none; }
+      .sensor-device > summary::before { content:'▸'; color:var(--muted); }
+      .sensor-device[open] > summary::before { content:'▾'; }
+      .sensor-device[open] > summary { border-bottom:1px solid var(--line); }
+      .sensor-device-title { flex:1; min-width:0; overflow-wrap:anywhere; font-weight:600; }
+      .sensor-device-count { color:var(--muted); font:11px Consolas,monospace; }
+      .sensor-device-temperature { color:var(--orange); font:11px Consolas,monospace; white-space:nowrap; }
+      .sensor-types { padding:0 10px 8px; }
+      .sensor-type > summary { padding:11px 0; font-size:12px; cursor:pointer; }
+      .sensor-device .sensor { padding:10px 0; gap:10px; }
+      .sensor-device .sensor strong { font-size:18px; }
+      .sensor-device summary:focus-visible { outline:2px solid var(--lime); outline-offset:2px; }
       .sensor {
         display: flex;
         justify-content: space-between;
@@ -606,17 +620,39 @@
         background: #e8f4ee;
       }
       .corelist {
-        max-height: 390px;
-        overflow: auto;
+        --core-row-height: 72px;
+        height: calc(5 * var(--core-row-height));
+        min-height: calc(5 * var(--core-row-height));
+        max-height: calc(5 * var(--core-row-height));
+        overflow-y: auto;
+        overflow-x: hidden;
         scrollbar-gutter: stable;
+      }
+      .corebody > .core-activity-notes {
+        height: 20px;
+        line-height: 20px;
+        margin: 0 0 8px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
       }
       .coreprocess {
         display: flex;
         align-items: center;
+        height: var(--core-row-height);
         gap: 10px;
         border-bottom: 1px solid var(--line);
         padding: 9px 0;
       }
+      .corelist .processlink { padding: 0; }
+      .corelist .processlink strong { line-height: 18px; }
+      .corelist .processlink small {
+        line-height: 14px;
+        max-height: 28px;
+        overflow: hidden;
+        margin-top: 4px;
+      }
+      .coreprocess svg, .coretoggle { flex-shrink: 0; }
       .processlink {
         min-width: 0;
         flex: 1;
@@ -679,10 +715,46 @@
         aside {
           grid-row: 1;
         }
-        .corelist {
-          max-height: 280px;
-        }
       }
+      .diagnostics { padding: 18px 20px; }
+      .core.protected { border:2px solid var(--orange); }
+      .core.protected.chosen { box-shadow:inset 0 0 0 1px var(--lime); }
+      .cpu-protection { padding:0 22px 18px; border-top:1px solid var(--line); }
+      .cpu-protection label { display:flex; align-items:center; gap:9px; margin-top:16px; font-size:13px; cursor:pointer; }
+      .cpu-protection input { width:auto; margin:0; accent-color:var(--lime); }
+      .cpu-protection .hint { margin:8px 0 0; }
+      #guard22State { font-weight:600; }
+      .application-group { border-bottom:1px solid var(--line); }
+      .application-heading { display:flex; align-items:center; gap:10px; height:50px; }
+      .application-heading .processlink { flex:1; min-width:0; }
+      .application-heading .coretoggle { flex-shrink:0; width:142px; white-space:normal; }
+      .application-group details { margin:0; }
+      .application-group summary { color:var(--muted); cursor:pointer; font-size:12px; height:21px; line-height:21px; }
+      .application-group .coreprocess { margin-left:12px; }
+      .group-option { display:flex; gap:7px; align-items:center; font-size:12px; }
+      .group-option input { width:auto; margin:0; }
+      .diag-summary { display:flex; gap:20px; flex-wrap:wrap; }
+      .diag-summary strong { display:block; font-size:22px; margin-top:5px; }
+      .sensor-table { width:100%; min-width:520px; }
+      .sensor-table td { padding:9px; }
+      .automation-form { width:800px; max-height:90vh; overflow:auto; }
+      .form-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin:12px 0; }
+      .form-grid label { display:flex; flex-direction:column; gap:6px; font-size:12px; }
+      .form-grid input,.form-grid select { width:100%; margin:0; }
+      .automation-form input[type=checkbox] { width:auto; margin:0 6px 0 0; }
+      .rule-row { display:flex; gap:10px; align-items:center; border-bottom:1px solid var(--line); padding:10px 0; }
+      .rule-row span { flex:1; overflow-wrap:anywhere; }
+      .event-log { max-height:190px; overflow:auto; font-size:12px; }
+      .process-badges { font-size:10px; color:var(--lime); font-weight:400; }
+      th button { padding:0; border:0; background:none; text-align:left; }
+      #processTable { min-width:850px; }
+      #automationStatus { margin:10px 0 20px; }
+      .priority-controls { margin-top:18px; }
+      .grid > *, .panel { min-width:0; }
+      header { min-height:56px; height:auto; gap:12px; }
+      .brand { flex-shrink:0; }
+      .status { flex-wrap:wrap; justify-content:flex-end; }
+      @media(max-width:760px) { header { flex-wrap:wrap; padding:12px 20px; } .brand .tag { display:none; } .status { justify-content:flex-start; } }
     </style>
   </head>
   <body>
@@ -694,6 +766,7 @@
       <div class="status">
         <select id="language" aria-label="Language"><option value="ru">RU</option><option value="en">EN</option></select>
         <button id="settingsOpen">⚙ Настройки</button>
+        <button id="automationOpen">Правила и защита CPU</button>
         <i class="dot" id="dot"></i><span id="connection">Подключение…</span>
       </div>
     </header>
@@ -733,6 +806,7 @@
           <p class="hint">Обновление каждую секунду</p>
         </div>
       </div>
+      <div id="automationStatus" class="hint"></div>
       <div class="grid">
         <div>
           <section class="panel">
@@ -754,6 +828,12 @@
               ><span style="color: var(--orange)">● Датчики · °C</span>
             </div>
             <div id="cores" class="cores"></div>
+            <div class="cpu-protection">
+              <label><input type="checkbox" id="guard22Toggle">Исключать CPU 22 для тяжёлых процессов</label>
+              <p class="hint" id="guard22State">Защита CPU 22 выключена</p>
+              <p class="hint">Оранжевая рамка означает включённое исключение для тяжёлых процессов. Сам CPU остаётся доступен Windows.</p>
+              <div class="actions"><button id="watchCpu22">Активность CPU 22</button></div>
+            </div>
           </section>
           <section class="panel lower">
             <div class="panelhead processhead">
@@ -767,10 +847,10 @@
               </div>
             </div>
             <div class="tablewrap">
-              <table>
+              <table id="processTable">
                 <thead>
                   <tr>
-                    <th>Процесс</th>
+                    <th><button id="sortName">Процесс</button></th>
                     <th>PID</th>
                     <th>
                       <button
@@ -788,7 +868,8 @@
                         RAM
                       </button>
                     </th>
-                    <th>Разрешённые CPU</th>
+                    <th><button id="sortAffinity">Разрешённые CPU</button></th>
+                    <th title="CPU, на которых процесс выполнялся за окно ETW в одну секунду">Выполнялся на CPU</th>
                   </tr>
                 </thead>
                 <tbody id="processes"></tbody>
@@ -804,6 +885,7 @@
             </div>
             <div class="corebody">
               <p class="hint" id="coreHint">Выберите ядро на карте.</p>
+              <p class="hint" id="coreLatency"></p>
               <div class="coretools" id="coreTools" hidden>
                 <div class="coretabs">
                   <button class="active" id="activityTab">Активность</button>
@@ -816,7 +898,13 @@
                   aria-label="Поиск на ядре"
                 />
                 <select id="activityThreshold" aria-label="Порог активности"><option value="0">Любая активность</option><option value="1">CPU ≥ 1%</option><option value="5">CPU ≥ 5%</option></select><span id="coreMatches" class="hint"></span>
+                <select id="activityWindow" aria-label="Окно активности"><option value="1">Последняя секунда</option><option value="20">Последние 20 секунд</option></select>
+                <button id="coreLogToggle">Записывать час</button><button id="coreHistoryOpen">Журнал за час</button>
+                <label class="group-option"><input type="checkbox" id="groupApplications" checked>Группировать по приложению</label>
               </div>
+              <p class="hint" id="applicationRuleHint" hidden>Действие для приложения сохраняет правило для всех его процессов и дочерних процессов, включая следующие запуски.</p>
+              <div class="notice" id="applicationResult" hidden></div>
+              <p id="coreActivityNotes" class="hint core-activity-notes"></p>
               <div id="coreProcesses" class="corelist"></div>
             </div>
           </section>
@@ -835,6 +923,20 @@
           </section>
         </aside>
       </div>
+      <section class="panel lower" id="diagnosticsPanel">
+        <div class="panelhead"><h2>Диагностика CPU</h2></div>
+        <div class="diagnostics">
+          <div id="cpuSummary" class="diag-summary"></div>
+          <div id="cpuTemperatureStatus"></div>
+          <h3>Задержки системы</h3><div id="latencySummary" class="diag-summary"></div>
+          <div id="latencyHistory"></div>
+          <p class="hint">Проба таймера каждые 10 ms: задержка пробуждения потока, не задержка аудио. DPC/ISR: длительность обработчиков ETW, без определения драйвера.</p>
+          <details><summary>Температуры, частоты и ограничения CPU</summary>
+            <p class="hint">Названия ядер датчика не равны номерам логических CPU. Троттлинг отображается только по явному флагу датчика.</p>
+            <div id="thermalDetails" class="tablewrap"></div>
+          </details>
+        </div>
+      </section>
     </main>
     <dialog id="launchDialog">
       <h2>Запустить программу на выбранных CPU</h2>
@@ -846,6 +948,7 @@
       />
       <div class="sectionlabel">Разрешённые CPU</div>
       <div id="launchCores" class="choices"></div>
+      <button id="launchAvoid22">Все, кроме CPU 22</button>
       <p class="hint">
         Запуск без аргументов. Приложения, передающие запуск другому процессу,
         могут не сохранить привязку.
@@ -863,6 +966,50 @@
       <p class="hint">ACPI и накопители читаются через Windows. Расширенные датчики работают внутри CoreScope.</p>
       <div class="actions"><button id="settingsSave">Сохранить настройки</button><button id="settingsCancel">Отмена</button></div>
     </dialog>
+    <dialog id="automationDialog" class="automation-form">
+      <h2>Правила и защита CPU</h2>
+      <p class="hint">Работает, пока CoreScope открыт или свёрнут в трей. CPU 22 — логический процессор с номером 22.</p>
+      <p id="governorWarning" class="notice" hidden>Process Lasso запущен. Одновременные правила двух приложений могут конфликтовать.</p>
+      <p><label><input type="checkbox" id="guardEnabled">Уводить тяжёлые приложения с выбранных CPU</label></p>
+      <div class="form-grid">
+        <label>Исключённые CPU<input id="guardCores" value="22" placeholder="22"></label>
+        <label>CPU процесса, % от всего CPU<input id="guardThreshold" type="number" min="0.1" max="100" step="0.1"></label>
+        <label>Нагрузка держится, секунд<input id="guardSeconds" type="number" min="1" max="60"></label>
+      </div>
+      <p class="hint">Ограничение применяется после обнаружения нагрузки и остаётся до выхода процесса. Для ограничения с момента запуска используйте «Запустить на CPU». GPU-нагрузка не является триггером.</p>
+      <p><label><input type="checkbox" id="balanceEnabled">Автобалансировка приоритетов</label></p>
+      <div class="form-grid">
+        <label>Общая загрузка, %<input id="balanceSystem" type="number" min="1" max="100"></label>
+        <label>CPU процесса, % от всего CPU<input id="balanceProcess" type="number" min="0.1" max="100" step="0.1"></label>
+        <label>Восстановление ниже, %<input id="balanceRecover" type="number" min="1" max="99"></label>
+        <label>Нагрузка держится, секунд<input id="balanceSeconds" type="number" min="1" max="60"></label>
+        <label>Спад нагрузки, секунд<input id="balanceRecoverySeconds" type="number" min="1" max="120"></label>
+      </div>
+      <p class="hint">Фоновые процессы: Normal → Below normal. Активное окно, его дочерние процессы, службы и критические процессы исключены.</p>
+      <h3>Постоянные правила</h3>
+      <p class="hint">Точное имя .exe или полный путь. Правило по пути имеет приоритет. Ручное правило имеет приоритет над автоматикой.</p>
+      <div id="ruleList"></div>
+      <div class="form-grid">
+        <label>Программа<input id="ruleTarget" placeholder="game.exe или C:\Games\game.exe"></label>
+        <label>Приоритет<select id="rulePriority"></select></label>
+        <label>Разрешённые CPU<input id="ruleCores" placeholder="Пусто — не менять"></label>
+        <label>Исключённые CPU правила<input id="ruleExcludedCores" placeholder="Пусто — не исключать"></label>
+      </div>
+      <p><label><input type="checkbox" id="ruleExcludeBalance">Исключить из автобалансировки</label></p>
+      <p><label><input type="checkbox" id="ruleExcludeGuard">Исключить из защиты CPU</label></p>
+      <p><label><input type="checkbox" id="ruleDescendants">Применять к дочерним процессам</label></p>
+      <div class="actions"><button id="ruleAvoid22">Все, кроме CPU 22</button><button id="ruleAdd">Добавить правило</button><button id="ruleClear">Очистить</button></div>
+      <p class="hint">Удаление правила прекращает его применение. Уже заданные постоянным правилом настройки остаются до ручного изменения или завершения процесса.</p>
+      <div class="actions"><button id="automationSave" class="primary">Сохранить и применить</button><button id="automationCancel">Отмена</button></div>
+      <h3>Последние действия</h3><div id="automationEvents" class="event-log"></div>
+    </dialog>
+    <dialog id="historyDialog" class="automation-form">
+      <h2 id="historyTitle">Журнал CPU</h2>
+      <p class="hint">Секундные наблюдения ETW за последний час. Между замерами возможны пропуски; это не непрерывная трасса.</p>
+      <div class="actions"><select id="historyMinutes" aria-label="Интервал журнала"><option value="5">5 минут</option><option value="20">20 минут</option><option value="60" selected>60 минут</option></select><button id="historyRefresh">Обновить</button><button id="historyExport">Экспорт JSON</button><button id="historyClose">Закрыть</button></div>
+      <p id="historyStatus" class="hint"></p><div id="historyRows" class="tablewrap"></div>
+      <h3>Отдельный замер</h3><input id="historyPosition" type="range" min="0" max="0" value="0" aria-label="Время замера"><p id="historyAt" class="hint"></p><div id="historySample" class="tablewrap"></div>
+    </dialog>
     <script>/*__I18N__*/</script>
     <script>
       const $ = (id) => document.getElementById(id),
@@ -875,6 +1022,7 @@
         coreMode = "activity",
         coreBusy = false,
         sort = "cpu",
+        sortAscending = false,
         memoryData = null,
         memoryLoading = false,
         busy = false,
@@ -900,7 +1048,7 @@
       const pct = (n) => Number(n || 0).toFixed(1);
       const temps = () =>
         data?.telemetry?.sensors?.filter(
-          (s) => s.kind === "Temperature" && Number.isFinite(s.value) && Date.now()/1000-(s.sample_time||data.telemetry.time)<20,
+          (s) => liveTemperature(s),
         ) || [];
       function toast(s) {
         $("toast").textContent = s;
@@ -1020,7 +1168,7 @@
         $("cores").innerHTML = cpus
           .map(
             (c) =>
-              `<button class="core ${filterCore === c.id ? "chosen" : ""}" data-core="${c.id}"><small>CPU ${c.id}</small><strong>${Math.round(c.usage)}<small>%</small></strong><div class="meter"><i style="width:${c.usage}%"></i></div></button>`,
+              coreButton(c,data.automation?.config,filterCore),
           )
           .join("");
       }
@@ -1036,13 +1184,15 @@
       let activityOrder=[];
       function renderActivity(core, sample) {
         const a=data.activity||{};
+        $("coreActivityNotes").textContent="";
+        $("coreActivityNotes").title="";
         if(a.status!=="running"||!sample){
           const messages={permission:"Для активности запустите CoreScope от администратора",starting:"Ожидание событий ETW…",stale:"События ETW задерживаются",unsupported:"Активность для нескольких групп CPU пока недоступна",stopped:"Сбор ETW остановлен",error:"Не удалось запустить ETW"};
           $("coreProcesses").innerHTML=`<div class="empty">${messages[a.status]||messages.starting}${a.error?' · '+a.error:''}</div>`;return;
         }
-        $("coreHint").textContent=`Выполнение за 1 секунду · задержка ${Math.round(a.lag_ms)} ms · Простой ${pct(sample.idle)}%`;
+        $("coreHint").textContent=`${sample.window_ms===20000?'Выполнение за 20 секунд':'Выполнение за 1 секунду'} · задержка ${Math.round(a.lag_ms)} ms · Простой ${pct(sample.idle)}%`;
         const q=$("coreSearch").value.toLowerCase(), processes=new Map(data.processes.map(p=>[p.pid,p]));
-        let rows=sample.rows.map(r=>({...r,process:processes.get(r.pid)})).filter(r=>matchesProcess(r.process||{pid:r.pid},q)&&r.usage>=Number($("activityThreshold").value));
+        let rows=sample.rows.map(r=>{const p=processes.get(r.pid);return {...r,process:r.identity && r.identity!==p?.identity?null:p};}).filter(r=>matchesProcess(r.process||{pid:r.pid,name:r.name},q)&&r.usage>=Number($("activityThreshold").value));
         $("coreMatches").textContent=rows.length+" / "+sample.rows.length;
         const hover=$("coreProcesses").matches(':hover')||$("coreProcesses").contains(document.activeElement);
         if(hover&&activityOrder.length){const order=new Map(activityOrder.map((pid,i)=>[pid,i]));rows.sort((a,b)=>(order.get(a.pid)??1e9)-(order.get(b.pid)??1e9));}
@@ -1051,11 +1201,14 @@
         const focused=$("coreProcesses").contains(document.activeElement)?document.activeElement:null;
         if(focused?.matches(":active"))return;
         const focusKey=focused?.dataset.togglePid ? `[data-toggle-pid="${focused.dataset.togglePid}"]` : focused?.dataset.pid ? `[data-pid="${focused.dataset.pid}"]` : null;
-        $("coreProcesses").innerHTML=(sample.unknown>0.1?`<p class="hint">Нераспознанное время: ${pct(sample.unknown)}%</p>`:'')+(a.lost?`<p class="hint">Потеряно событий ETW: ${a.lost}</p>`:'')+rows.map(r=>{
+        const notes=[sample.unknown>0.1?`Нераспознанное время: ${pct(sample.unknown)}%`:'',a.lost?`Потеряно событий ETW: ${a.lost}`:''].filter(Boolean).join(' · ');
+        $("coreActivityNotes").textContent=notes;
+        $("coreActivityNotes").title=notes;
+        $("coreProcesses").innerHTML=rows.map(r=>{
           const p=r.process,on=p?.affinity?.includes(core.id),last=on&&p.affinity.length===1;
           const canChange=p?.identity&&p.allowed?.includes(core.id)&&!last;
           const h=r.history||[],points=h.map((v,i)=>`${i*90/Math.max(1,h.length-1)},${22-Math.min(100,v)*.2}`).join(' ');
-          const title=p?`<button class="processlink" data-pid="${r.pid}" data-identity="${esc(p.identity||'')}"><strong>${esc(p.name)}</strong><small>PID ${r.pid} · ${pct(r.usage)}% · ${pct(r.ms)} ms</small></button>`:`<div class="processlink"><strong>PID ${r.pid}</strong><small>Процесс завершён или недоступен · ${pct(r.usage)}%</small></div>`;
+          const title=p?`<button class="processlink" data-pid="${r.pid}" data-identity="${esc(p.identity||'')}"><strong>${esc(p.name)}</strong><small>PID ${r.pid} · ${pct(r.usage)}% · ${pct(r.ms)} ms</small></button>`:`<div class="processlink"><strong>${esc(r.name||'PID '+r.pid)}</strong><small>PID ${r.pid} · Процесс завершён или недоступен · ${pct(r.usage)}% · ${pct(r.ms)} ms</small></div>`;
           return `<div class="coreprocess">${title}<svg width="90" height="24" viewBox="0 0 90 24" aria-label="Доля времени ядра"><polyline fill="none" stroke="#247a54" stroke-width="1.5" points="${points}"/></svg><button class="coretoggle ${on?'deny':'allow'}" data-toggle-pid="${r.pid}" data-identity="${esc(p?.identity||'')}" data-toggle-core="${core.id}" data-enable="${!on}" ${canChange?'':'disabled'}>${last?'Единственное':!p?.allowed?.includes(core.id)?'Нет доступа':on?'Запретить':'Разрешить'}</button></div>`;
         }).join('')||'<div class="empty">'+(q||sample.rows.length?'Процессы не найдены':sample.unknown>1?'Недостаточно данных':'Простой')+'</div>';
         if(focusKey)$("coreProcesses").querySelector(focusKey)?.focus({preventScroll:true});
@@ -1065,17 +1218,26 @@
         const core = data.cpus.find((c) => c.id === filterCore);
         $("coreTools").hidden = !core;
         $("activityThreshold").hidden=coreMode!=="activity";
+        $("activityWindow").hidden=coreMode!=="activity";
+        $("groupApplications").parentElement.hidden=coreMode==="activity";
+        $("applicationRuleHint").hidden=coreMode==="activity"||!$("groupApplications").checked;
         $("coreMatches").textContent="";
+        $("coreActivityNotes").textContent="";
+        $("coreActivityNotes").title="";
         if (!core) {
           $("coreTitle").textContent = "Процессы ядра";
           $("coreHint").textContent = "Выберите ядро на карте.";
           $("coreUsage").textContent = "";
+          $("coreLatency").textContent = "";
           $("coreProcesses").innerHTML = "";
           return;
         }
         $("coreTitle").textContent = "CPU " + core.id;
+        $("coreLogToggle").textContent=data.settings?.activity_log_cores?.includes(core.id)?'Остановить запись':'Записывать час';
         $("coreUsage").textContent = pct(core.usage) + "%";
-        $("coreHint").textContent = coreMode === "activity" ? "Выполнение за 1 секунду · ETW" : "Доступ к ядру по affinity";
+        const interrupt=data.activity?.status==='running'?data.activity.interrupts?.find(c=>c.id===core.id):null;
+        $("coreLatency").textContent=interrupt?`DPC: ${Math.round(interrupt.dpc_max_us)} µs · ISR: ${Math.round(interrupt.isr_max_us)} µs · ${interrupt.dpc_count} / ${interrupt.isr_count} событий за замер`:'DPC / ISR: ETW недоступен';
+        $("coreHint").textContent = coreMode === "activity" ? ($("activityWindow").value==='20'?"Выполнение за 20 секунд · ETW":"Выполнение за 1 секунду · ETW") : "Доступ к ядру по affinity";
         const known = data.processes.filter((p) =>
           p.allowed?.includes(core.id),
         );
@@ -1086,9 +1248,10 @@
         $("allowedTab").classList.toggle("active", coreMode === "allowed");
         $("deniedTab").classList.toggle("active", coreMode === "denied");
         $("activityTab").classList.toggle("active", coreMode === "activity");
-        const activityCore=data.activity?.cores?.find(c=>c.id===core.id);
+        const activityCore=($("activityWindow").value==='20'?data.activity?.recent:data.activity?.cores)?.find(c=>c.id===core.id);
         $("activityTab").textContent="Активность"+(activityCore ? " · "+activityCore.rows.length : "");
         if(coreMode==="activity") { renderActivity(core,activityCore); return; }
+        if($("groupApplications").checked){renderApplicationGroups(core);return;}
         const q = $("coreSearch").value.toLowerCase();
         const rows = known
           .filter(
@@ -1145,18 +1308,21 @@
           (p) =>
             matchesProcess(p,q,$("processFilter").value,data.cpus.length),
         );
-        rows.sort((a, b) => b[sort] - a[sort] || a.pid-b.pid);
-        $("sortCpu").textContent=sort==="cpu"?"CPU ↓":"CPU";
-        $("sortRam").textContent=sort==="memory"?"RAM ↓":"RAM";
+        rows.sort((a,b)=>compareProcesses(a,b,sort,sortAscending));
+        for (const [id,key,label] of [["sortCpu","cpu","CPU"],["sortRam","memory","RAM"],["sortName","name","Процесс"],["sortAffinity","affinity","Разрешённые CPU"]]) {
+          $(id).textContent=label+(sort===key?(sortAscending?" ↑":" ↓"):"");
+          $(id).parentElement.setAttribute("aria-sort",sort===key?(sortAscending?"ascending":"descending"):"none");
+        }
+        const activity=processActivity(data.activity);
         $("count").textContent = "· " + rows.length + " / " + data.processes.length;
         $("clearFilter").hidden = !q && $("processFilter").value==="all";
         $("processes").innerHTML =
           rows
             .map(
               (p) =>
-                `<tr data-pid="${p.pid}" data-identity="${esc(p.identity||'')}" class="${p.pid === selected ? "selected" : ""}"><td>${esc(p.name)}</td><td class="mono">${p.pid}</td><td class="mono">${pct(p.cpu)}%</td><td class="mono">${bytes(p.memory)}</td><td>${p.affinity === null ? "Нет доступа" : p.affinity.length === data.cpus.length ? "Все CPU" : p.affinity.join(", ")}</td></tr>`,
+                `<tr data-pid="${p.pid}" data-identity="${esc(p.identity||'')}" class="${p.pid === selected ? "selected" : ""}"><td>${esc(p.name)}<div class="process-badges">${p.guarded?'CPU guard · ':''}${p.restrained?'Balance · ':''}${p.rule?'Правило':''}</div></td><td class="mono">${p.pid}</td><td class="mono">${pct(p.cpu)}%</td><td class="mono">${bytes(p.memory)}</td><td>${p.affinity === null ? "Нет доступа" : p.affinity.length === data.cpus.length ? "Все CPU" : p.affinity.join(", ")}</td><td>${activity===null?'ETW недоступен':activity.get(p.pid)?.join(', ')||'Нет активности'}</td></tr>`,
             )
-            .join("") || '<tr><td colspan="5">Процессы не найдены</td></tr>';
+            .join("") || '<tr><td colspan="6">Процессы не найдены</td></tr>';
       }
       function inspect() {
         const p = data.processes.find(
@@ -1175,6 +1341,7 @@
         $("inspector").innerHTML =
           `<div class="selected-title">${esc(p.name)}</div><div class="mono muted" id="processMeta">PID ${p.pid} · ${p.affinity?.length ?? "—"} разрешённых CPU</div><div class="statsrow"><div class="muted">CPU<strong id="processCpu">${pct(p.cpu)}%</strong></div><div class="muted">Рабочий набор<strong id="processRam">${bytes(p.memory)}</strong></div></div><div class="sectionlabel">Разрешить исполнение на CPU</div><div class="choices">${available.map((i) => `<button data-choice="${i}" class="${draft.has(i) ? "active" : ""}" aria-pressed="${draft.has(i)}">${i}</button>`).join("")}</div>${!available.length ? '<div class="notice">Привязка недоступна.</div>' : ""}<div class="actions"><button id="apply" class="primary" ${busy || !draft.size || !available.length ? "disabled" : ""}>${busy ? "Применяем…" : "Применить"}</button><button id="all" ${!available.length ? "disabled" : ""}>Все CPU</button></div><div class="sectionlabel">Виртуальная память</div><button id="memoryLoad" ${memoryLoading ? "disabled" : ""}>${memoryLoading ? "Читаем карту…" : "Обновить карту памяти"}</button><div id="memoryContent"></div>`;
         renderMemory();
+        $("inspector").insertAdjacentHTML("beforeend",processControls(p));
       }
       function renderMemory() {
         if (!memoryData || !$("memoryContent")) return;
@@ -1199,48 +1366,39 @@
       function sensors() {
         const list = data.telemetry?.sensors || [];
         $("sensorCount").textContent = `${list.length} ДАТЧИКОВ`;
+        const signature=sensorPanelSignature(list,data.telemetry,data.settings,language);
+        if(signature===sensors.signature)return;
+        const panel=$("sensors"),scroll=panel.scrollTop;
+        const focused=panel.contains(document.activeElement)?document.activeElement:null;
+        if(focused?.matches(':active'))return;
+        sensors.signature=signature;
+        const details=[...panel.querySelectorAll('details[data-sensor-key]')];
+        sensorDisclosureState=rememberSensorDisclosure(sensorDisclosureState,details.map(d=>[d.dataset.sensorKey,d.open]));
+        const focusedKey=focused?.tagName==='SUMMARY'?focused.parentElement?.dataset.sensorKey:null;
         if (!list.length) {
-          $("sensors").innerHTML =
+          panel.innerHTML =
             '<div class="notice">Датчики пока недоступны</div><p class="hint">Проверяем Windows и встроенный модуль.</p>' + sensorStatus();
           return;
         }
-        const units = {
-          Temperature: "°C",
-          Fan: "RPM",
-          Power: "W",
-          Voltage: "V",
-          Clock: "MHz",
-          Load: "%",
-        };
-        $("sensors").innerHTML =
-          sensorStatus() +
-          list
-            .slice()
-            .sort(
-              (a, b) =>
-                (a.kind === "Temperature" ? -1 : 1) -
-                (b.kind === "Temperature" ? -1 : 1),
-            )
-            .map(
-              (s) =>
-                `<div class="sensor"><div>${esc(s.name)}<small>${esc(s.parent)} · ${esc(s.kind)}</small><small>${esc(s.source)} · ${new Date(s.sample_time*1000).toLocaleTimeString(language)}${Date.now()/1000-s.sample_time>20?' · Данные устарели':''}</small>${sparkline(s)}</div><strong>${Number(s.value).toFixed(s.kind === "Voltage" ? 2 : 1)} <small style="display:inline">${units[s.kind] || ""}</small></strong></div>`,
-            )
-            .join("");
+        panel.innerHTML=sensorStatus()+groupedSensorMarkup(list);
+        panel.scrollTop=scroll;
+        if(focusedKey)[...panel.querySelectorAll('details[data-sensor-key]')].find(d=>d.dataset.sensorKey===focusedKey)?.querySelector('summary')?.focus({preventScroll:true});
       }
       function sensorStatus() {
         const errors=[...(data.telemetry?.errors||[]),...(data.telemetry?.extended?.errors||[])];
         if(data.telemetry?.error)errors.push(data.telemetry.error);
         if(data.telemetry?.extended?.error)errors.push(data.telemetry.extended.error);
         const cpu=temps().some(s=>/cpu/i.test(s.parent));
-        return `<p class="hint">Windows · ${data.settings?.extended_sensors?'Встроенный модуль включён':'Встроенный модуль выключен'}</p><p class="hint">ACPI — термозона, не отдельное ядро.</p>${!cpu?'<p class="hint">Температура CPU недоступна</p>':''}${errors.length?`<details><summary>Диагностика датчиков</summary><p class="hint">${errors.map(esc).join('<br>')}</p></details>`:''}`;
+        return `<p class="hint">Windows · ${data.settings?.extended_sensors?'Встроенный модуль включён':'Встроенный модуль выключен'}</p><p class="hint">ACPI — термозона, не отдельное ядро.</p>${!cpu?cpuTemperatureNotice():''}${errors.length?`<details data-sensor-key="sensor-diagnostics" ${sensorDisclosureOpen(sensorDisclosureState,'sensor-diagnostics')?'open':''}><summary>Диагностика датчиков</summary><p class="hint">${errors.map(esc).join('<br>')}</p></details>`:''}`;
       }
       function sparkline(s) {
         const h=s.history||[];
         if(h.length<2)return '';
         const values=h.map(p=>p[1]),min=Math.min(...values),max=Math.max(...values),range=Math.max(1,max-min);
         const elapsed=Math.max(1,h[h.length-1][0]-h[0][0]);
+        const unit={Temperature:'°C',Clock:'MHz',Load:'%',Power:'W',Throttling:''}[s.kind]||'';
         const points=values.map((v,i)=>`${(h[i][0]-h[0][0])*160/elapsed},${26-(v-min)/range*22}`).join(' ');
-        return `<svg width="164" height="30" viewBox="0 0 164 30" role="img" aria-label="История температур"><polyline points="${points}" fill="none" stroke="#247a54" stroke-width="1.5"/></svg><small>MIN ${min.toFixed(1)}° · MAX ${max.toFixed(1)}° · ${Math.round((h[h.length-1][0]-h[0][0])/60)} min</small>`;
+        return `<svg width="164" height="30" viewBox="0 0 164 30" role="img" aria-label="История датчика"><polyline points="${points}" fill="none" stroke="#247a54" stroke-width="1.5"/></svg><small>MIN ${min.toFixed(1)} ${unit} · MAX ${max.toFixed(1)} ${unit} · ${Math.round((h[h.length-1][0]-h[0][0])/60)} min</small>`;
       }
       function render() {
         if (!data.ready) return;
@@ -1282,6 +1440,8 @@
           }
         }
         sensors();
+        renderDiagnostics();
+        renderAutomationStatus();
         $("launchOpen").disabled = !data.affinity_supported;
       }
       async function poll() {
@@ -1315,6 +1475,8 @@
       };
       $("coreSearch").oninput = renderCore;
       $("activityThreshold").onchange=()=>{activityOrder=[];renderCore();};
+      $("activityWindow").onchange=()=>{activityOrder=[];renderCore();};
+      $("groupApplications").onchange=renderCore;
       $("processFilter").onchange=()=>data&&table();
       document.addEventListener("click", async (e) => {
         const toggle = e.target.closest("[data-toggle-pid]");
@@ -1451,13 +1613,8 @@
         map();
         renderCore();
       };
-      $("sortCpu").onclick = () => {
-        sort = "cpu";
-        table();
-      };
-      $("sortRam").onclick = () => {
-        sort = "memory";
-        table();
+      for(const [id,key] of [["sortCpu","cpu"],["sortRam","memory"],["sortName","name"],["sortAffinity","affinity"]]) $(id).onclick=()=>{
+        sortAscending=sort===key?!sortAscending:["name","affinity"].includes(key);sort=key;table();
       };
       $("launchOpen").onclick = () => {
         if (!data?.ready) return;
@@ -1498,7 +1655,9 @@
       $("language").onchange=async()=>{try{ const s=await api('/api/settings',{...data.settings,language:$("language").value}); data.settings=s;setLanguage(s.language); }catch(e){toast(e.message);}};
       $("settingsOpen").onclick=()=>{ $("closeToTray").checked=data?.settings?.close_to_tray??true;$("extendedSensors").checked=data?.settings?.extended_sensors??true;$("settingsDialog").showModal(); };
       $("settingsCancel").onclick=()=>$("settingsDialog").close();
-      $("settingsSave").onclick=async()=>{try{data.settings=await api('/api/settings',{language,close_to_tray:$("closeToTray").checked,extended_sensors:$("extendedSensors").checked});$("settingsDialog").close();toast('Настройки сохранены');}catch(e){toast(e.message);}};
+      $("settingsSave").onclick=async()=>{try{data.settings=await api('/api/settings',{...data.settings,language,close_to_tray:$("closeToTray").checked,extended_sensors:$("extendedSensors").checked});$("settingsDialog").close();toast('Настройки сохранены');}catch(e){toast(e.message);}};
+      /*__AUTOMATION__*/
+      /*__DIAGNOSTICS__*/
       poll();
     </script>
   </body>

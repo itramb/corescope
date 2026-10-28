@@ -6,6 +6,7 @@ pub struct Settings {
     pub language: String,
     pub close_to_tray: bool,
     pub extended_sensors: bool,
+    pub activity_log_cores: Vec<usize>,
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -13,10 +14,17 @@ impl Default for Settings {
             language: "ru".into(),
             close_to_tray: true,
             extended_sensors: true,
+            activity_log_cores: Vec::new(),
         }
     }
 }
 pub fn directory() -> std::path::PathBuf {
+    let args: Vec<_> = std::env::args_os().collect();
+    if let Some(pair) = args.windows(2).find(|p| p[0] == "--data-dir") {
+        let dir = std::path::PathBuf::from(&pair[1]);
+        assert!(dir.is_absolute(), "--data-dir must be absolute");
+        return dir;
+    }
     use std::os::windows::ffi::OsStringExt;
     unsafe {
         let mut raw = std::ptr::null_mut();
@@ -61,6 +69,14 @@ pub fn get() -> Settings {
 pub fn save(value: Settings) -> Result<Settings, String> {
     if !["ru", "en"].contains(&value.language.as_str()) {
         return Err("Invalid language".into());
+    }
+    if value.activity_log_cores.len() > 4
+        || value
+            .activity_log_cores
+            .iter()
+            .any(|&c| c >= usize::BITS as usize)
+    {
+        return Err("Select up to four CPUs for logging".into());
     }
     let mut guard = state().lock().unwrap();
     let p = path();
